@@ -1,56 +1,41 @@
-const express = require("express");
-const cors = require("cors");
 const dotenv = require("dotenv");
-const mongoose = require("mongoose");
-const neo4j = require("neo4j-driver");
 
 dotenv.config();
 
+const express = require("express");
+const cors = require("cors");
+const connectMongoDB = require("./config/mongodb");
+const neo4jDriver = require("./config/neo4j");
+const uploadRoutes = require("./routes/uploadRoutes");
+
 const app = express();
+const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use("/api/uploads", uploadRoutes);
 
-const port = process.env.PORT || 3000;
-
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB conectado");
-  })
-  .catch((error) => {
-    console.error("Error al conectar MongoDB:", error.message);
-  });
-
-const neo4jDriver = neo4j.driver(
-  process.env.NEO4J_URI,
-  neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD)
-);
+connectMongoDB();
 
 app.get("/api/health", async (req, res) => {
-  let mongoStatus = "disconnected";
-  let neo4jStatus = "disconnected";
-
-  if (mongoose.connection.readyState === 1) {
-    mongoStatus = "connected";
-  }
-
   const session = neo4jDriver.session();
 
   try {
     await session.run("RETURN 1 AS ok");
-    neo4jStatus = "connected";
+
+    res.json({
+      status: "ok",
+      mongodb: "connected",
+      neo4j: "connected"
+    });
   } catch (error) {
-    neo4jStatus = "error";
+    res.status(500).json({
+      status: "error",
+      message: error.message
+    });
   } finally {
     await session.close();
   }
-
-  res.json({
-    status: "ok",
-    mongodb: mongoStatus,
-    neo4j: neo4jStatus
-  });
 });
 
 app.listen(port, () => {
