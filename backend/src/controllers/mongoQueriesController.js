@@ -1,0 +1,152 @@
+const Evaluacion = require("../models/Evaluacion");
+
+async function aspirantesPorTipoInstitucion(req, res) {
+  try {
+    const data = await Evaluacion.aggregate([
+      {
+        $group: {
+          _id: "$tipo_institucion_educativa",
+          cantidad: { $addToSet: "$correlativo_aspirante" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          tipo_institucion_educativa: "$_id",
+          cantidad_aspirantes: { $size: "$cantidad" }
+        }
+      },
+      { $sort: { cantidad_aspirantes: -1 } }
+    ]);
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Error en consulta", error: error.message });
+  }
+}
+
+async function aprobadosPorMateria(req, res) {
+  try {
+    const data = await Evaluacion.aggregate([
+      { $match: { aprobado: true } },
+      {
+        $group: {
+          _id: "$materia",
+          cantidad_aprobados: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          materia: "$_id",
+          cantidad_aprobados: 1
+        }
+      },
+      { $sort: { cantidad_aprobados: -1 } }
+    ]);
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Error en consulta", error: error.message });
+  }
+}
+
+async function aprobadosPorCarreraAnio(req, res) {
+  try {
+    const data = await Evaluacion.aggregate([
+      { $match: { aprobado: true } },
+      {
+        $group: {
+          _id: {
+            carrera_objetivo: "$carrera_objetivo",
+            anio_de_ingreso: "$anio_de_ingreso"
+          },
+          aspirantes: { $addToSet: "$correlativo_aspirante" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          carrera_objetivo: "$_id.carrera_objetivo",
+          anio_de_ingreso: "$_id.anio_de_ingreso",
+          cantidad_aspirantes_aprobados: { $size: "$aspirantes" }
+        }
+      },
+      { $sort: { anio_de_ingreso: 1, cantidad_aspirantes_aprobados: -1 } }
+    ]);
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Error en consulta", error: error.message });
+  }
+}
+
+async function porcentajeAprobacionMateria(req, res) {
+  try {
+    const data = await Evaluacion.aggregate([
+      {
+        $group: {
+          _id: "$materia",
+          total: { $sum: 1 },
+          aprobados: {
+            $sum: {
+              $cond: ["$aprobado", 1, 0]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          materia: "$_id",
+          total: 1,
+          aprobados: 1,
+          porcentaje_aprobacion: {
+            $round: [{ $multiply: [{ $divide: ["$aprobados", "$total"] }, 100] }, 2]
+          }
+        }
+      },
+      { $sort: { porcentaje_aprobacion: -1 } }
+    ]);
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Error en consulta", error: error.message });
+  }
+}
+
+async function promedioEdadCarrera(req, res) {
+  try {
+    const data = await Evaluacion.aggregate([
+      { $match: { edad: { $ne: null, $gte: 10, $lte: 100 } } },
+      {
+        $group: {
+          _id: "$carrera_objetivo",
+          promedio_edad: { $avg: "$edad" },
+          cantidad_registros: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          carrera_objetivo: "$_id",
+          promedio_edad: { $round: ["$promedio_edad", 2] },
+          cantidad_registros: 1
+        }
+      },
+      { $sort: { promedio_edad: -1 } }
+    ]);
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Error en consulta", error: error.message });
+  }
+}
+
+module.exports = {
+  aspirantesPorTipoInstitucion,
+  aprobadosPorMateria,
+  aprobadosPorCarreraAnio,
+  porcentajeAprobacionMateria,
+  promedioEdadCarrera
+};
