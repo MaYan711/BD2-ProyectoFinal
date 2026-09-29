@@ -21,4 +21,10 @@ router.get("/tasa-aprobacion-edad", controller.tasaAprobacionEdad);
 router.get("/promedio-intentos-materia", controller.promedioIntentosMateria);
 router.get("/historial-completo/:correlativo", controller.historialCompletoAspirante);
 
+router.get("/carreras-reprobados-primer-intento", controller.carrerasReprobadosPrimerIntento);
+router.get("/top-municipios-aspirantes", controller.topMunicipiosAspirantes);
+router.get("/tasa-aprobacion-tipo-institucion", controller.tasaAprobacionTipoInstitucion);
+router.get("/carreras-demandadas-departamento", controller.carrerasDemandadasDepartamento);
+router.get("/evolucion-aprobacion-anio", controller.evolucionAprobacionAnio);
+
 module.exports = router;
