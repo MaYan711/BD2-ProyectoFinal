@@ -10,6 +10,7 @@ const uploadRoutes = require("./routes/uploadRoutes");
 const mongoQueriesRoutes = require("./routes/mongoQueriesRoutes");
 
 const neo4jQueriesRoutes = require("./routes/neo4jQueriesRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/mongodb", mongoQueriesRoutes);
 app.use("/api/neo4j", neo4jQueriesRoutes);
+app.use("/api/admin", adminRoutes);
 
 connectMongoDB();
 
