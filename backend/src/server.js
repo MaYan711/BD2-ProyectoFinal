@@ -9,6 +9,8 @@ const neo4jDriver = require("./config/neo4j");
 const uploadRoutes = require("./routes/uploadRoutes");
 const mongoQueriesRoutes = require("./routes/mongoQueriesRoutes");
 
+const neo4jQueriesRoutes = require("./routes/neo4jQueriesRoutes");
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -16,6 +18,7 @@ app.use(cors());
 app.use(express.json());
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/mongodb", mongoQueriesRoutes);
+app.use("/api/neo4j", neo4jQueriesRoutes);
 
 connectMongoDB();
 
