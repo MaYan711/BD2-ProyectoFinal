@@ -517,3 +517,130 @@ tbody tr:hover {
     min-width: 700px;
   }
 }
+
+.upload-form {
+  align-items: center;
+}
+
+.selected-files {
+  margin-bottom: 18px;
+  padding: 15px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+}
+
+.selected-files strong {
+  color: #1e3a8a;
+}
+
+.selected-files ul {
+  margin: 10px 0 0;
+  padding-left: 22px;
+}
+
+.selected-files li {
+  margin-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+
+.upload-results {
+  display: grid;
+  gap: 12px;
+}
+
+.upload-result {
+  padding: 14px;
+  border-radius: 9px;
+}
+
+.upload-result.success {
+  color: #14532d;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.upload-result.failure {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+
+.upload-result pre {
+  max-height: 240px;
+  margin: 10px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.upload-result.warning {
+  color: #854d0e;
+  background: #fefce8;
+  border: 1px solid #fde047;
+}
+
+.upload-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 14px;
+}
+
+.upload-result-header > strong {
+  overflow-wrap: anywhere;
+}
+
+.upload-result-header > span {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.upload-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.upload-summary p {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 7px;
+}
+
+.upload-summary span {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.upload-summary strong {
+  font-size: 1rem;
+}
+
+.upload-message {
+  margin: 0;
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 7px;
+}
+
+@media (max-width: 700px) {
+  .upload-result-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .upload-summary {
+    grid-template-columns: 1fr;
+  }
+}
