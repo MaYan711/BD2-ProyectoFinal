@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import "./App.css";
 import VisualGraph from "./components/VisualGraph";
+import ConsultaExplorer from "./components/ConsultaExplorer";
 
 const API_URL = "http://localhost:3000/api";
 
@@ -393,6 +394,8 @@ function App() {
           </div>
         </article>
       </section>
+
+      <ConsultaExplorer apiUrl={API_URL} />
 
       <section className="two-columns">
         <article className="panel">
