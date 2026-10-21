@@ -16,6 +16,7 @@ import {
   YAxis
 } from "recharts";
 import "./App.css";
+import VisualGraph from "./components/VisualGraph";
 
 const API_URL = "http://localhost:3000/api";
 
@@ -324,27 +325,25 @@ function App() {
           {grafoError && <div className="alert error">{grafoError}</div>}
 
           {grafo && (
-            <div className="graph-card">
-              <h3>Aspirante {grafo.correlativo_aspirante}</h3>
-              <div className="graph-row">
-                <span>Aspirante</span>
-                <span>Evaluaciones: {grafo.evaluaciones?.length || 0}</span>
-                <span>Carreras: {grafo.carreras?.join(", ") || "Sin datos"}</span>
-                <span>Municipios: {grafo.municipios?.join(", ") || "Sin datos"}</span>
-                <span>Tipo: {grafo.tipos_institucion?.join(", ") || "Sin datos"}</span>
-              </div>
+                    <div className="graph-card">
+                      <h3>Aspirante {grafo.correlativo_aspirante}</h3>
 
-              <div className="graph-list">
-                {(grafo.evaluaciones || []).map((evaluacion, index) => (
-                  <div key={`${evaluacion.materia}-${index}`} className="graph-item">
-                    <strong>{evaluacion.materia}</strong>
-                    <span>{evaluacion.aprobacion}</span>
-                    <small>Intento {evaluacion.intento}</small>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                      <div className="graph-row">
+                        <span>Sexo: {grafo.sexo || "Sin datos"}</span>
+                        <span>Evaluaciones: {grafo.evaluaciones?.length || 0}</span>
+                        <span>Carreras: {grafo.carreras?.join(", ") || "Sin datos"}</span>
+                        <span>Municipios: {grafo.municipios?.join(", ") || "Sin datos"}</span>
+                        <span>
+                          Departamentos: {grafo.departamentos?.join(", ") || "Sin datos"}
+                        </span>
+                        <span>
+                          Tipo: {grafo.tipos_institucion?.join(", ") || "Sin datos"}
+                        </span>
+                      </div>
+
+                      <VisualGraph grafo={grafo} />
+                    </div>
+                  )}
         </article>
       </section>
     </main>
