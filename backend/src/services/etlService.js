@@ -153,6 +153,18 @@ async function cargarNeo4j(registros) {
 
 async function procesarCsv(file) {
   const inicio = Date.now();
+  const archivoExistente = await Evaluacion.exists({
+    archivo_origen: file.originalname
+  });
+
+  if (archivoExistente) {
+    const error = new Error(
+        `El archivo ${file.originalname} ya fue procesado anteriormente`
+    );
+
+    error.code = "ARCHIVO_DUPLICADO";
+    throw error;
+  }
   const contenido = file.buffer.toString("utf8");
 
   const filas = parse(contenido, {

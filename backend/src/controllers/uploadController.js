@@ -10,12 +10,19 @@ async function cargarCsv(req, res) {
 
     const resultado = await procesarCsv(req.file);
 
-    res.json({
+    return res.json({
       message: "Archivo procesado correctamente",
       resultado
     });
   } catch (error) {
-    res.status(500).json({
+    if (error.code === "ARCHIVO_DUPLICADO") {
+      return res.status(409).json({
+        message: error.message,
+        codigo: error.code
+      });
+    }
+
+    return res.status(500).json({
       message: "Error al procesar archivo",
       error: error.message
     });
