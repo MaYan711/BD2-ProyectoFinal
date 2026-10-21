@@ -963,3 +963,35 @@ tbody tr:hover {
     margin-left: 0;
   }
 }
+
+.query-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.query-actions button {
+  height: 44px;
+  white-space: nowrap;
+}
+
+.query-actions .cancel-button {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+}
+
+.query-actions .cancel-button:hover {
+  color: white;
+  background: #dc2626;
+}
+
+@media (max-width: 950px) {
+  .query-actions {
+    width: 100%;
+  }
+
+  .query-actions button {
+    flex: 1;
+  }
+}

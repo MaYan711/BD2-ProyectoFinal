@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import axios from "axios";
 
 const consultasMongo = [
@@ -281,6 +281,7 @@ function ConsultaExplorer({ apiUrl }) {
   const [tiempoMs, setTiempoMs] = useState(null);
   const [consultaEjecutada, setConsultaEjecutada] =
     useState(false);
+    const requestControllerRef = useRef(null);
 
   const consultas =
     baseDatos === "mongodb"
@@ -315,96 +316,135 @@ function ConsultaExplorer({ apiUrl }) {
     return Array.from(nombres);
   }, [resultado]);
 
-  function cambiarBaseDatos(event) {
-    const nuevaBase = event.target.value;
-    const nuevasConsultas =
-      nuevaBase === "mongodb"
-        ? consultasMongo
-        : consultasNeo4j;
 
-    setBaseDatos(nuevaBase);
-    setConsultaId(nuevasConsultas[0].id);
-    setParametro("");
-    setResultado([]);
-    setError("");
-    setTiempoMs(null);
-    setConsultaEjecutada(false);
+  function cancelarConsulta() {
+  if (requestControllerRef.current) {
+    requestControllerRef.current.abort();
+    requestControllerRef.current = null;
   }
+
+  setCargando(false);
+}
+
+function cambiarBaseDatos(event) {
+  cancelarConsulta();
+
+  const nuevaBase = event.target.value;
+  const nuevasConsultas =
+    nuevaBase === "mongodb"
+      ? consultasMongo
+      : consultasNeo4j;
+
+  setBaseDatos(nuevaBase);
+  setConsultaId(nuevasConsultas[0].id);
+  setParametro("");
+  setResultado([]);
+  setError("");
+  setTiempoMs(null);
+  setConsultaEjecutada(false);
+}
 
   function cambiarConsulta(event) {
-    setConsultaId(event.target.value);
-    setParametro("");
-    setResultado([]);
-    setError("");
-    setTiempoMs(null);
-    setConsultaEjecutada(false);
-  }
-
-  async function ejecutarConsulta(event) {
-    event.preventDefault();
-    setError("");
-    setResultado([]);
-    setTiempoMs(null);
-    setConsultaEjecutada(false);
-
-    if (
-      consultaSeleccionada.parametro &&
-      !parametro.trim()
-    ) {
-      setError(
-        "Debe ingresar el parametro requerido para ejecutar esta consulta."
-      );
-      return;
-    }
-
-    let ruta = consultaSeleccionada.ruta;
-
-    if (consultaSeleccionada.parametro) {
-      ruta = ruta.replace(
-        `:${consultaSeleccionada.parametro}`,
-        encodeURIComponent(parametro.trim())
-      );
-    }
-
-    setCargando(true);
-    const inicio = performance.now();
-
-    try {
-      const response = await axios({
-        method: consultaSeleccionada.metodo,
-        url: `${apiUrl}${ruta}`
-      });
-
-      setResultado(normalizarRespuesta(response.data));
-      setConsultaEjecutada(true);
-    } catch (requestError) {
-  const status = requestError.response?.status;
-
-  if (status === 400) {
-    setError(
-      "Los datos enviados no son validos para ejecutar esta consulta."
-    );
-  } else if (status === 404) {
-    setError(
-      "No se encontro informacion para la consulta seleccionada."
-    );
-  } else if (status === 409) {
-    setError(
-      "La operacion no puede realizarse porque la informacion ya existe."
-    );
-  } else if (status >= 500) {
-    setError(
-      "Ocurrio un problema interno al ejecutar la consulta."
-    );
-  } else {
-    setError(
-      "No fue posible comunicarse con el servidor. Verifica que el backend este ejecutandose."
-    );
-  }
-
-  setConsultaEjecutada(true);
+  cancelarConsulta();
+  setConsultaId(event.target.value);
+  setParametro("");
+  setResultado([]);
+  setError("");
+  setTiempoMs(null);
+  setConsultaEjecutada(false);
 }
+
+ async function ejecutarConsulta(event) {
+  event.preventDefault();
+
+  cancelarConsulta();
+  setError("");
+  setResultado([]);
+  setTiempoMs(null);
+  setConsultaEjecutada(false);
+
+  if (
+    consultaSeleccionada.parametro &&
+    !parametro.trim()
+  ) {
+    setError(
+      "Debe ingresar el parametro requerido para ejecutar esta consulta."
+    );
+    return;
   }
+
+  let ruta = consultaSeleccionada.ruta;
+
+  if (consultaSeleccionada.parametro) {
+    ruta = ruta.replace(
+      `:${consultaSeleccionada.parametro}`,
+      encodeURIComponent(parametro.trim())
+    );
+  }
+
+  const controller = new AbortController();
+  requestControllerRef.current = controller;
+
+  setCargando(true);
+  const inicio = performance.now();
+
+  try {
+    const response = await axios({
+      method: consultaSeleccionada.metodo,
+      url: `${apiUrl}${ruta}`,
+      signal: controller.signal,
+      timeout: 30000
+    });
+
+    setResultado(normalizarRespuesta(response.data));
+    setConsultaEjecutada(true);
+  } catch (requestError) {
+    if (
+      requestError.code === "ERR_CANCELED" ||
+      requestError.name === "CanceledError"
+    ) {
+      setError("La consulta fue cancelada.");
+    } else if (requestError.code === "ECONNABORTED") {
+      setError(
+        "La consulta excedio el tiempo maximo de 30 segundos."
+      );
+    } else {
+      const status = requestError.response?.status;
+
+      if (status === 400) {
+        setError(
+          "Los datos enviados no son validos para ejecutar esta consulta."
+        );
+      } else if (status === 404) {
+        setError(
+          "No se encontro informacion para la consulta seleccionada."
+        );
+      } else if (status === 409) {
+        setError(
+          "La operacion no puede realizarse porque la informacion ya existe."
+        );
+      } else if (status >= 500) {
+        setError(
+          "Ocurrio un problema interno al ejecutar la consulta."
+        );
+      } else {
+        setError(
+          "No fue posible comunicarse con el servidor. Verifica que el backend este ejecutandose."
+        );
+      }
+    }
+
+    setConsultaEjecutada(true);
+  } finally {
+    if (requestControllerRef.current === controller) {
+      setTiempoMs(
+        Math.round((performance.now() - inicio) * 100) / 100
+      );
+      setCargando(false);
+      requestControllerRef.current = null;
+    }
+  }
+}
 
   return (
     <section className="query-explorer">
@@ -486,11 +526,23 @@ function ConsultaExplorer({ apiUrl }) {
           </div>
         )}
 
-        <button type="submit" disabled={cargando}>
-          {cargando
-            ? "Ejecutando consulta..."
-            : "Ejecutar consulta"}
-        </button>
+        <div className="query-actions">
+  <button type="submit" disabled={cargando}>
+    {cargando
+      ? "Ejecutando consulta..."
+      : "Ejecutar consulta"}
+  </button>
+
+  {cargando && (
+    <button
+      type="button"
+      className="cancel-button"
+      onClick={cancelarConsulta}
+    >
+      Cancelar
+    </button>
+  )}
+</div>
       </form>
 
       <div className="query-description">
