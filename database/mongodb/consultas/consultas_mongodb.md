@@ -1,203 +1,661 @@
 # Consultas MongoDB
 
-Este archivo documenta las 20 consultas implementadas en MongoDB
+Este archivo documenta las 20 consultas implementadas en MongoDB. La base de datos utilizada es `bd2_proyecto_final` y la coleccion principal creada por Mongoose es `evaluacions`.
 
-## 1. Aspirantes por tipo de institucion
+Las consultas se ejecutan desde el backend mediante el modelo `Evaluacion`. A continuacion se muestran en una forma equivalente para `mongosh`.
 
-Endpoint:
+## 1. Aspirantes por tipo de institucion educativa
 
-GET /api/mongodb/aspirantes-tipo-institucion
+**Endpoint:** `GET /api/mongodb/aspirantes-tipo-institucion`
 
-Descripcion:
+Agrupa los aspirantes por tipo de institucion y evita contar varias veces al mismo aspirante.
 
-Agrupa los aspirantes segun el tipo de institucion educativa de procedencia.
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: "$tipo_institucion_educativa",
+      cantidad: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      tipo_institucion_educativa: "$_id",
+      cantidad_aspirantes: { $size: "$cantidad" }
+    }
+  },
+  { $sort: { cantidad_aspirantes: -1 } }
+])
+```
 
-## 2. Aprobados por materia
+## 2. Cantidad de aprobados por materia
 
-Endpoint:
+**Endpoint:** `GET /api/mongodb/aprobados-materia`
 
-GET /api/mongodb/aprobados-materia
+Cuenta las evaluaciones aprobadas y las agrupa por materia.
 
-Descripcion:
+```javascript
+db.evaluacions.aggregate([
+  { $match: { aprobado: true } },
+  {
+    $group: {
+      _id: "$materia",
+      cantidad_aprobados: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      materia: "$_id",
+      cantidad_aprobados: 1
+    }
+  },
+  { $sort: { cantidad_aprobados: -1 } }
+])
+```
 
-Cuenta la cantidad de evaluaciones aprobadas por materia.
+## 3. Aprobados por carrera y anio de ingreso
 
-## 3. Aprobados por carrera y anio
+**Endpoint:** `GET /api/mongodb/aprobados-carrera-anio`
 
-Endpoint:
+Agrupa los aspirantes aprobados por carrera objetivo y anio de ingreso.
 
-GET /api/mongodb/aprobados-carrera-anio
-
-Descripcion:
-
-Agrupa aspirantes aprobados por carrera objetivo y anio de ingreso.
+```javascript
+db.evaluacions.aggregate([
+  { $match: { aprobado: true } },
+  {
+    $group: {
+      _id: {
+        carrera_objetivo: "$carrera_objetivo",
+        anio_de_ingreso: "$anio_de_ingreso"
+      },
+      aspirantes: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      carrera_objetivo: "$_id.carrera_objetivo",
+      anio_de_ingreso: "$_id.anio_de_ingreso",
+      cantidad_aspirantes_aprobados: { $size: "$aspirantes" }
+    }
+  },
+  { $sort: { anio_de_ingreso: 1, cantidad_aspirantes_aprobados: -1 } }
+])
+```
 
 ## 4. Porcentaje de aprobacion por materia
 
-Endpoint:
+**Endpoint:** `GET /api/mongodb/porcentaje-aprobacion-materia`
 
-GET /api/mongodb/porcentaje-aprobacion-materia
+Calcula el total, la cantidad de aprobados y el porcentaje de aprobacion de cada materia.
 
-Descripcion:
-
-Calcula el porcentaje de aprobacion por materia usando total de evaluaciones y aprobadas.
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: "$materia",
+      total: { $sum: 1 },
+      aprobados: {
+        $sum: { $cond: ["$aprobado", 1, 0] }
+      }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      materia: "$_id",
+      total: 1,
+      aprobados: 1,
+      porcentaje_aprobacion: {
+        $round: [
+          { $multiply: [{ $divide: ["$aprobados", "$total"] }, 100] },
+          2
+        ]
+      }
+    }
+  },
+  { $sort: { porcentaje_aprobacion: -1 } }
+])
+```
 
 ## 5. Promedio de edad por carrera
 
-Endpoint:
+**Endpoint:** `GET /api/mongodb/promedio-edad-carrera`
 
-GET /api/mongodb/promedio-edad-carrera
+Calcula la edad promedio por carrera, excluyendo edades nulas o fuera del rango valido.
 
-Descripcion:
+```javascript
+db.evaluacions.aggregate([
+  { $match: { edad: { $ne: null, $gte: 10, $lte: 100 } } },
+  {
+    $group: {
+      _id: "$carrera_objetivo",
+      promedio_edad: { $avg: "$edad" },
+      cantidad_registros: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      carrera_objetivo: "$_id",
+      promedio_edad: { $round: ["$promedio_edad", 2] },
+      cantidad_registros: 1
+    }
+  },
+  { $sort: { promedio_edad: -1 } }
+])
+```
 
-Calcula el promedio de edad de los aspirantes agrupado por carrera objetivo.
+## 6. Creacion de la coleccion auxiliar resumen_carrera
 
-## 6. Resumen por carrera
+**Endpoint:** `POST /api/mongodb/resumen-carrera`
 
-Endpoint:
+Genera un resumen por carrera y guarda el resultado en la coleccion `resumen_carrera`.
 
-POST /api/mongodb/resumen-carrera
+```javascript
+const resumen = db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: "$carrera_objetivo",
+      total_evaluaciones: { $sum: 1 },
+      aspirantes: { $addToSet: "$correlativo_aspirante" },
+      aprobados: {
+        $sum: { $cond: ["$aprobado", 1, 0] }
+      },
+      promedio_edad: { $avg: "$edad" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      carrera_objetivo: "$_id",
+      total_evaluaciones: 1,
+      total_aspirantes: { $size: "$aspirantes" },
+      aprobados: 1,
+      promedio_edad: { $round: ["$promedio_edad", 2] }
+    }
+  },
+  { $sort: { total_aspirantes: -1 } }
+]).toArray()
 
-Descripcion:
+db.resumen_carrera.deleteMany({})
 
-Genera una coleccion de resumen con totales agrupados por carrera.
+if (resumen.length > 0) {
+  db.resumen_carrera.insertMany(resumen)
+}
+```
 
-## 7. Edad de aprobados por carrera y tipo de institucion
+## 7. Promedio de edad de aprobados por carrera y tipo de institucion
 
-Endpoint:
+**Endpoint:** `GET /api/mongodb/edad-aprobados-carrera-tipo`
 
-GET /api/mongodb/edad-aprobados-carrera-tipo
+Calcula la edad promedio de los aprobados por carrera y tipo de institucion.
 
-Descripcion:
+```javascript
+db.evaluacions.aggregate([
+  {
+    $match: {
+      aprobado: true,
+      edad: { $ne: null, $gte: 10, $lte: 100 }
+    }
+  },
+  {
+    $group: {
+      _id: {
+        carrera_objetivo: "$carrera_objetivo",
+        tipo_institucion_educativa: "$tipo_institucion_educativa"
+      },
+      promedio_edad: { $avg: "$edad" },
+      cantidad_registros: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      carrera_objetivo: "$_id.carrera_objetivo",
+      tipo_institucion_educativa: "$_id.tipo_institucion_educativa",
+      promedio_edad: { $round: ["$promedio_edad", 2] },
+      cantidad_registros: 1
+    }
+  },
+  { $sort: { carrera_objetivo: 1, promedio_edad: -1 } }
+])
+```
 
-Agrupa aspirantes aprobados por edad, carrera y tipo de institucion.
+## 8. Distribucion de aprobados por municipio y carrera objetivo
 
-## 8. Aprobados por municipio y carrera
+**Endpoint:** `GET /api/mongodb/aprobados-municipio-carrera`
 
-Endpoint:
+Cuenta las evaluaciones aprobadas agrupadas por municipio y carrera objetivo.
 
-GET /api/mongodb/aprobados-municipio-carrera
+```javascript
+db.evaluacions.aggregate([
+  { $match: { aprobado: true } },
+  {
+    $group: {
+      _id: {
+        municipio_institucion_educativa: "$municipio_institucion_educativa",
+        carrera_objetivo: "$carrera_objetivo"
+      },
+      cantidad_aprobados: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      municipio_institucion_educativa: "$_id.municipio_institucion_educativa",
+      carrera_objetivo: "$_id.carrera_objetivo",
+      cantidad_aprobados: 1
+    }
+  },
+  { $sort: { cantidad_aprobados: -1 } },
+  { $limit: 100 }
+])
+```
 
-Descripcion:
+## 9. Evaluaciones por mes y materia para instituciones publicas
 
-Cuenta aspirantes aprobados agrupados por municipio y carrera objetivo.
+**Endpoint:** `GET /api/mongodb/evaluaciones-mes-materia-publicas`
 
-## 9. Evaluaciones por mes, materia e instituciones publicas
+Cuenta las evaluaciones de instituciones publicas por mes y materia.
 
-Endpoint:
+```javascript
+db.evaluacions.aggregate([
+  {
+    $match: {
+      tipo_institucion_educativa: "PUBLICO",
+      fecha_asignacion: { $ne: null }
+    }
+  },
+  {
+    $group: {
+      _id: {
+        mes: { $month: "$fecha_asignacion" },
+        materia: "$materia"
+      },
+      cantidad_evaluaciones: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      mes: "$_id.mes",
+      materia: "$_id.materia",
+      cantidad_evaluaciones: 1
+    }
+  },
+  { $sort: { mes: 1, materia: 1 } }
+])
+```
 
-GET /api/mongodb/evaluaciones-mes-materia-publicas
+## 10. Top 5 de carreras mas demandadas entre 16 y 18 anios
 
-Descripcion:
+**Endpoint:** `GET /api/mongodb/top-carreras-16-18`
 
-Agrupa evaluaciones de instituciones publicas por mes y materia.
+Obtiene las cinco carreras con mas aspirantes unicos entre 16 y 18 anios.
 
-## 10. Top carreras de aspirantes entre 16 y 18 anios
+```javascript
+db.evaluacions.aggregate([
+  { $match: { edad: { $gte: 16, $lte: 18 } } },
+  {
+    $group: {
+      _id: "$carrera_objetivo",
+      aspirantes: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      carrera_objetivo: "$_id",
+      cantidad_aspirantes: { $size: "$aspirantes" }
+    }
+  },
+  { $sort: { cantidad_aspirantes: -1 } },
+  { $limit: 5 }
+])
+```
 
-Endpoint:
+## 11. Historial de desempeno por aspirante
 
-GET /api/mongodb/top-carreras-16-18
+**Endpoint:** `GET /api/mongodb/historial-desempeno/:correlativo`
 
-Descripcion:
+Busca el historial de evaluaciones de un aspirante y ordena sus resultados.
 
-Obtiene las carreras mas demandadas por aspirantes jovenes.
+```javascript
+const correlativo = "949D241AC10256EDF11339A303C72A50"
 
-## 11. Historial de desempeno de aspirante
+db.evaluacions.find(
+  { correlativo_aspirante: correlativo.toUpperCase() },
+  {
+    _id: 0,
+    materia: 1,
+    numero_de_fecha_de_evaluacion: 1,
+    aprobacion: 1,
+    aprobado: 1,
+    fecha_asignacion: 1,
+    anio_de_ingreso: 1,
+    carrera_objetivo: 1
+  }
+).sort({
+  anio_de_ingreso: 1,
+  materia: 1,
+  numero_de_fecha_de_evaluacion: 1
+})
+```
 
-Endpoint:
+## 12. Distribucion por sexo y tipo de institucion educativa
 
-GET /api/mongodb/historial-desempeno/:correlativo
+**Endpoint:** `GET /api/mongodb/distribucion-sexo-tipo`
 
-Descripcion:
+Agrupa aspirantes unicos por sexo y tipo de institucion.
 
-Muestra el historial de evaluaciones de un aspirante segun su correlativo.
-
-## 12. Distribucion por sexo y tipo de institucion
-
-Endpoint:
-
-GET /api/mongodb/distribucion-sexo-tipo
-
-Descripcion:
-
-Agrupa aspirantes por sexo y tipo de institucion educativa.
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: {
+        sexo: "$sexo",
+        tipo_institucion_educativa: "$tipo_institucion_educativa"
+      },
+      aspirantes: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      sexo: "$_id.sexo",
+      tipo_institucion_educativa: "$_id.tipo_institucion_educativa",
+      cantidad_aspirantes: { $size: "$aspirantes" }
+    }
+  },
+  { $sort: { tipo_institucion_educativa: 1, sexo: 1 } }
+])
+```
 
 ## 13. Tasa de aprobacion por edad
 
-Endpoint:
+**Endpoint:** `GET /api/mongodb/tasa-aprobacion-edad`
 
-GET /api/mongodb/tasa-aprobacion-edad
+Calcula el total, aprobados y porcentaje de aprobacion para cada edad valida.
 
-Descripcion:
+```javascript
+db.evaluacions.aggregate([
+  { $match: { edad: { $ne: null, $gte: 10, $lte: 100 } } },
+  {
+    $group: {
+      _id: "$edad",
+      total: { $sum: 1 },
+      aprobados: {
+        $sum: { $cond: ["$aprobado", 1, 0] }
+      }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      edad: "$_id",
+      total: 1,
+      aprobados: 1,
+      porcentaje_aprobacion: {
+        $round: [
+          { $multiply: [{ $divide: ["$aprobados", "$total"] }, 100] },
+          2
+        ]
+      }
+    }
+  },
+  { $sort: { edad: 1 } }
+])
+```
 
-Calcula el porcentaje de aprobacion agrupado por edad.
+## 14. Numero promedio de intentos por materia
 
-## 14. Promedio de intentos por materia
+**Endpoint:** `GET /api/mongodb/promedio-intentos-materia`
 
-Endpoint:
+Calcula el promedio de oportunidades de evaluacion por materia.
 
-GET /api/mongodb/promedio-intentos-materia
+```javascript
+db.evaluacions.aggregate([
+  {
+    $match: {
+      numero_de_fecha_de_evaluacion: { $ne: null }
+    }
+  },
+  {
+    $group: {
+      _id: "$materia",
+      promedio_intentos: { $avg: "$numero_de_fecha_de_evaluacion" },
+      cantidad_evaluaciones: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      materia: "$_id",
+      promedio_intentos: { $round: ["$promedio_intentos", 2] },
+      cantidad_evaluaciones: 1
+    }
+  },
+  { $sort: { promedio_intentos: -1 } }
+])
+```
 
-Descripcion:
+## 15. Historial completo de un aspirante
 
-Calcula el promedio de intentos de evaluacion por materia.
+**Endpoint:** `GET /api/mongodb/historial-completo/:correlativo`
 
-## 15. Historial completo de aspirante
+Muestra todos los registros asociados al correlativo indicado.
 
-Endpoint:
+```javascript
+const correlativo = "949D241AC10256EDF11339A303C72A50"
 
-GET /api/mongodb/historial-completo/:correlativo
+db.evaluacions.find(
+  { correlativo_aspirante: correlativo.toUpperCase() },
+  { _id: 0, __v: 0 }
+).sort({
+  fecha_asignacion: 1,
+  materia: 1
+})
+```
 
-Descripcion:
+## 16. Carreras con mas aspirantes reprobados en primer intento
 
-Muestra todos los registros asociados a un aspirante.
+**Endpoint:** `GET /api/mongodb/carreras-reprobados-primer-intento`
 
-## 16. Carreras con reprobados en primer intento
+Obtiene las carreras con mas aspirantes unicos reprobados en la primera oportunidad.
 
-Endpoint:
+```javascript
+db.evaluacions.aggregate([
+  {
+    $match: {
+      numero_de_fecha_de_evaluacion: 1,
+      aprobado: false
+    }
+  },
+  {
+    $group: {
+      _id: "$carrera_objetivo",
+      aspirantes: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      carrera_objetivo: "$_id",
+      cantidad_aspirantes_reprobados: { $size: "$aspirantes" }
+    }
+  },
+  { $sort: { cantidad_aspirantes_reprobados: -1 } },
+  { $limit: 10 }
+])
+```
 
-GET /api/mongodb/carreras-reprobados-primer-intento
+## 17. Top 5 municipios con mayor cantidad de aspirantes
 
-Descripcion:
+**Endpoint:** `GET /api/mongodb/top-municipios-aspirantes`
 
-Obtiene las carreras con mayor cantidad de aspirantes reprobados en el primer intento.
+Obtiene los cinco municipios con mas aspirantes unicos.
 
-## 17. Top municipios con mas aspirantes
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: "$municipio_institucion_educativa",
+      aspirantes: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      municipio_institucion_educativa: "$_id",
+      cantidad_aspirantes: { $size: "$aspirantes" }
+    }
+  },
+  { $sort: { cantidad_aspirantes: -1 } },
+  { $limit: 5 }
+])
+```
 
-Endpoint:
+## 18. Tasa de aprobacion por tipo de institucion educativa
 
-GET /api/mongodb/top-municipios-aspirantes
+**Endpoint:** `GET /api/mongodb/tasa-aprobacion-tipo-institucion`
 
-Descripcion:
+Calcula y compara el porcentaje de aprobacion por tipo de institucion.
 
-Obtiene los municipios con mayor cantidad de aspirantes.
-
-## 18. Tasa de aprobacion por tipo de institucion
-
-Endpoint:
-
-GET /api/mongodb/tasa-aprobacion-tipo-institucion
-
-Descripcion:
-
-Calcula el porcentaje de aprobacion agrupado por tipo de institucion educativa.
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: "$tipo_institucion_educativa",
+      total: { $sum: 1 },
+      aprobados: {
+        $sum: { $cond: ["$aprobado", 1, 0] }
+      }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      tipo_institucion_educativa: "$_id",
+      total: 1,
+      aprobados: 1,
+      porcentaje_aprobacion: {
+        $round: [
+          { $multiply: [{ $divide: ["$aprobados", "$total"] }, 100] },
+          2
+        ]
+      }
+    }
+  },
+  { $sort: { porcentaje_aprobacion: -1 } }
+])
+```
 
 ## 19. Carreras mas demandadas por departamento
 
-Endpoint:
+**Endpoint:** `GET /api/mongodb/carreras-demandadas-departamento`
 
-GET /api/mongodb/carreras-demandadas-departamento
+Agrupa aspirantes unicos por departamento y carrera objetivo.
 
-Descripcion:
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: {
+        departamento: "$departamento_institucion_educativa",
+        carrera: "$carrera_objetivo"
+      },
+      aspirantes: { $addToSet: "$correlativo_aspirante" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      departamento_institucion_educativa: "$_id.departamento",
+      carrera_objetivo: "$_id.carrera",
+      cantidad_aspirantes: { $size: "$aspirantes" }
+    }
+  },
+  {
+    $sort: {
+      departamento_institucion_educativa: 1,
+      cantidad_aspirantes: -1
+    }
+  }
+])
+```
 
-Agrupa aspirantes por departamento y carrera objetivo.
+## 20. Evolucion de aprobacion por anio de ingreso
 
-## 20. Evolucion de aprobacion por anio
+**Endpoint:** `GET /api/mongodb/evolucion-aprobacion-anio`
 
-Endpoint:
+Calcula la cantidad y porcentaje de aprobados y no aprobados para cada anio de ingreso.
 
-GET /api/mongodb/evolucion-aprobacion-anio
+```javascript
+db.evaluacions.aggregate([
+  {
+    $group: {
+      _id: {
+        anio_de_ingreso: "$anio_de_ingreso",
+        aprobacion: "$aprobacion"
+      },
+      cantidad: { $sum: 1 }
+    }
+  },
+  {
+    $group: {
+      _id: "$_id.anio_de_ingreso",
+      resultados: {
+        $push: {
+          aprobacion: "$_id.aprobacion",
+          cantidad: "$cantidad"
+        }
+      },
+      total: { $sum: "$cantidad" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      anio_de_ingreso: "$_id",
+      total: 1,
+      resultados: {
+        $map: {
+          input: "$resultados",
+          as: "item",
+          in: {
+            aprobacion: "$$item.aprobacion",
+            cantidad: "$$item.cantidad",
+            porcentaje: {
+              $round: [
+                {
+                  $multiply: [
+                    { $divide: ["$$item.cantidad", "$total"] },
+                    100
+                  ]
+                },
+                2
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  { $sort: { anio_de_ingreso: 1 } }
+])
+```
 
-Descripcion:
+## Ejecucion desde mongosh
 
-Muestra la distribucion de aprobados y no aprobados por anio de ingreso.
+Para ingresar a MongoDB dentro del contenedor se utiliza:
+
+```powershell
+docker exec -it bd2_mongodb mongosh bd2_proyecto_final
+```
+
+Una vez dentro de `mongosh`, se puede copiar y ejecutar cualquiera de las consultas anteriores.
+
+Las mismas consultas tambien pueden ejecutarse desde la interfaz grafica mediante el explorador de consultas del proyecto.
